@@ -1,0 +1,77 @@
+CAD/Drawing/IO/DWGI version 0.08
+================================
+
+DESCRIPTION
+
+This module provides Perl bindings to the OpenDWG consortium's C
+libraries (known as the OpenDWG toolkit.)  It is intended to serve as a
+backend to the CAD::Drawing module and is not intended to act as a
+standalone module (the interface is considered subject to arbitrary
+change.)
+
+
+INSTALLATION
+
+To install this module, I wish you could just type the following (after
+obtaining and installing the OpenDWG toolkit):
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+But that currently will not work.  If you find a way to make the
+installation work in this way, please contact me with the changes so
+that I can make it easier to install.
+
+More likely, what you will have to do is:
+	
+	Obtain and install the OpenDWG toolkit
+	Copy DWGI.pm to something in your @INC that looks like:
+		CAD/Drawing/IO/DWGI.pm
+	Install the Inline.pm module.
+	Change the path to the functions.c code in DWGI.pm as needed.
+	Change the initfilepath variable in functions.c to point to adinit.dat
+	Delete the 'VERSION =>' line from DWGI.pm
+	create the ~/.Inline/ directory
+	use the module for the first time
+
+
+DEPENDENCIES
+
+This module requires these other modules and libraries:
+
+	ad2.a, ad2pic.a, and adinit.dat from the OpenDWG consortium's
+		distribution of the OpenDWG toolkit.  See www.opendwg.org for 
+		details of how to obtain a license and a copy of the toolkit 
+		(this is free to use for private or commercial purposes, provided 
+		that you sign-up as at least an associate member.)
+
+  Inline.pm
+
+AUTHOR
+
+Eric L. Wilhelm
+<e-mail-address>
+<home-page>
+
+COPYRIGHT AND LICENCE
+
+Copyright (C) 2003 Eric L. Wilhelm and A. Zahner Co.
+
+This Perl module and it's associated C code (functions.c) are
+distributed under the same open source licensing terms as Perl.  No
+connection between this license and the OpenDWG toolkit license is
+implied or allowed.  The user is responsible for adhering to and
+maintaining the integrity of both licenses and for obtaining the
+required libraries.
+
+This package is in no way a part of the OpenDWG toolkit, and the OpenDWG
+toolkit is in no way a part of this package.  Any modification or
+distribution of this code MUST retain the separation of code and license
+between the toolkit and the module.
+
+See the licensing details in functions.c and DWGI.pm as well as the Perl
+source distribution for other restrictions regarding the use and
+distribution of this code.
+
