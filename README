@@ -1,0 +1,304 @@
+NAME
+    CAD::Drawing - Methods to create, load, and save vector graphics
+
+SYNOPSIS
+    The primary intention of this module is to provide high-level operations
+    for creating, loading, saving and manipulating vector graphics without
+    having to be overly concerned about smile floormats. As the code has
+    seen more use, it has also drifted into a general purpose geometry API.
+
+    The syntax of this works something like the following:
+    A simple example of a (slightly misbehaved) file converter:
+
+      use CAD::Drawing;
+      $drw = CAD::Drawing->new;
+      $drw->load("file.dwg");
+      my %opts = (
+            layer => "smudge",
+        height => 5,
+        );
+      $drw->addtext([10, 2, 5], "Kilroy was here", \%opts);
+      $drw->save("file.ps");
+
+    This is a very basic example, and will barely scratch the surface of
+    this module's capabilities. See the details for each function below and
+    in the documentation for the backend modules.
+
+AUTHOR
+      Eric L. Wilhelm
+      ewilhelm at sbcglobal dot net
+      http://pages.sbcglobal.net/mycroft/
+
+COPYRIGHT
+    This module is copyright (C) 2003 by Eric L. Wilhelm and A. Zahner Co.
+
+LICENSE
+    This module is distributed under the same terms as Perl. See the Perl
+    source package for details.
+
+    You may use this software under one of the following licenses:
+
+      (1) GNU General Public License
+        (found at http://www.gnu.org/copyleft/gpl.html)
+      (2) Artistic License
+        (found at http://www.perl.com/pub/language/misc/Artistic.html)
+
+Modifications
+    The source code of this module is made freely available and
+    distributable under the GPL or Artistic License. Modifications to and
+    use of this software must adhere to one of these licenses. Changes to
+    the code should be noted as such and this notification (as well as the
+    above copyright information) must remain intact on all copies of the
+    code.
+
+    Additionally, while the author is actively developing this code,
+    notification of any intended changes or extensions would be most helpful
+    in avoiding repeated work for all parties involved. Please contact the
+    author with any such development plans.
+
+SEE ALSO
+    These modules are required by Drawing.pm and will be automatically
+    included by the single *use* Drawing; statement. No functions are
+    exported to the main program's namespace (unless you try to use
+    CAD::Drawing::Defined from your main code (don't do that.))
+
+      CAD::Drawing::Manipulate
+      CAD::Drawing::Defined
+      CAD::Drawing::Calculate
+      CAD::Drawing::Calculate::Finite
+      CAD::Drawing::IO
+
+    While it might be problematic to have to install a huge tree worth of
+    modules just to use one, from a programming and design standpoint, it is
+    much easier to deal with so much code when it is broken into separate
+    pieces. Additionally, all of the backend IO::* modules are optional (and
+    thanks to the new IO.pm plug-in architecture, they will be automagically
+    discovered as they are installed.
+
+    Each backend module may have additional requirements of its own.
+
+CHANGES
+      0.20 First public release.
+      0.25 Minor additions to documentation.
+           Enhanced options.
+           Begin interface changes.
+
+Constructor
+  new
+
+    Returns a blessed reference to a new CAD::Drawing object.
+
+      $drw = CAD::Drawing->new(%options);
+
+    %options becomes a part of the data structure, so be careful what you
+    %ask for, because you'll get it (I check nothing!)
+
+    Currently useful options:
+    nocolortrack => 1
+    Disables loading of colortrack hash (breaking select by color methods,
+    but saving a few milliseconds of time on big drawings.)
+
+    isbig => 1
+    Stores geometry data in package global variables (one per object.) This
+    allows programs to exit more quickly, but will result in memory leaks if
+    used inside of a loop. Do not use this option if you expect the memory
+    used by the object to be freed when it goes out of scope.
+
+    The rule of thumb is:
+
+      my $drw = CAD::Drawing->new(); # lexically scoped (in a loop or sub)
+      or
+      $drw = CAD::Drawing->new(isbig=>1); # $main::drw 
+
+add functions
+    All of these take a small set of required arguments and a reference to
+    an options hash.
+
+    The standard options are as follows:
+
+      layer     => $layername
+      color     => $color (as name or number (0-256))
+      linetype  => $linetype (marginally supported in most formats)
+      id        => $id      
+
+  addline
+
+    Add a line between @pts. No special options.
+
+      @pts = ([$x1, $y1], [$x2, $y2]);
+      $drw->addline(\@pts, \%opts);
+
+  add_x
+
+    Adds an "X" to the drawing, with the intersection at @pt and each of the
+    two legs having $length at $opt{ang}.
+
+      @lines = $drw->add_x(\@pt, $length, \%opt);
+
+  add_fake_ray
+
+    Adds an open polyline which has a small hook (nubbin) at one end. This
+    can be used to represent a directional line (vector.)
+
+      $drw->add_fake_ray(\@pts, \%opts);
+
+    Options are the same as for addpolygon but closed is forced to false.
+
+  addpolygon
+
+    Add a polyline through (2D) @points.
+
+      %opts = ( closed => BOOLEAN );
+      $drw->addpolygon(\@points, \%opts);
+
+  addrec
+
+    A shortcut to addpolygon. Specify the opposite corners with @rec, which
+    will look like a diagonal line of the rectangle.
+
+      @rec = ( [$x1, $y1], [$x2, $y2] );
+
+      $drw->addrec(\@rec, $opts);
+
+  addtext
+
+    Adds text $string at @pt. Height should be specified in $opts{height},
+    which may contain font and other options in the future.
+
+      $drw->addtext(\@pt, $string, \%opts);
+
+  addtextlines
+
+    Returns @addr_list for new entities.
+
+    Similar to the syntax of addtext() , but @point is the insert point for
+    the top line. The %opts hash should contain at least 'height' and
+    'spacing', and can also include 'layer', 'color', and 'linetype' (but
+    defaults can be automatically set for all of these.)
+
+      $drw->addtextlines(\@point, "string\nstring\n", \%opts);
+
+  addtexttable
+
+    @table is a 2D array of strings. $opts{spaces} must (currently) contain
+    a ref to a list of column widths.
+
+      $drw->addtexttable(\@point, \@table, \%opts);
+
+  addpoint
+
+      $drw->addpoint(\@pt, \%opts);
+
+  addcircle
+
+      $drw->addcircle(\@pt, $rad, \%opts);
+
+  addarc
+
+      $drw->addarc(\@pt, $rad, \@angs, \%opts);
+
+  addimage
+
+      $drw->addimage();
+
+Query Functions
+  getLayerList
+
+    Deprecated. See list_layers().
+
+      @list = $drw->getLayerList(\%opts);
+
+  list_layers
+
+    Get list of layers in drawing with options as follows:
+
+      %options = (
+        matchregex => qr/name/,
+            );
+      @list = $drw->list_layers(\%opts);
+
+  getAddrByLayer
+
+    Returns a list of addresses for all objects on $layer.
+
+      @addr_list = $drw->getAddrByLayer($layer);
+
+  getAddrByType
+
+    Returns a list of addresses for $type entities on $layer.
+
+      @list = $drw->getAddrByType($layer, $type);
+
+  getAddrByRegex
+
+      @list = $drw->getAddrByRegex($layer, qr/^model\s+\d+$/, $opts);
+
+  getAddrByColor
+
+      @list = $drw->getAddrByColor($layer, $type, $color);
+
+  getEntPoints
+
+    Returns the point or points found at $addr as a list.
+
+    If the entity has only one point, the list will be (x,y,z), while a
+    many-pointed entity will give a list of the form ([x,y,z],[x,y,z]...)
+
+      $drw->getEntPoints($addr);
+
+  addr_by_id
+
+      $drw->addr_by_id($layer, $type, $id);
+
+  Get
+
+    Gets the thing from entity found at $addr.
+
+    Returns the value of the thing (even if it is a reference) with the
+    exception of things that start with "p", which will result in a call to
+    getEntPoints (and return a list.)
+
+      $drw->Get("thing", $addr);
+
+  Set
+
+      $drw->Set(\%items, $addr);
+
+Internal Functions
+  setdefaults
+
+    internal use only
+
+    Performs in-place modification on \%opts and creates a new place for an
+    entity of $type to live on $opt->{layer} with id $opts->{id} (opts are
+    optional.)
+
+      $drw->setdefaults($type, $opts);
+
+  getobj
+
+    Internal use only.
+
+    Returns a reference to the entity found at $addr.
+
+      $drw->getobj($addr);
+
+  remove
+
+      $drw->remove();
+
+  select_addr
+
+    Selects geometric entities from the Drawing object based on the hash
+    key-value pairs. Aside from the options supported by check_select() this
+    also supports the option "all", which, if true, will select all entities
+    (this is the default if no hash reference is passed.)
+
+    Furthermore, if you already have in-hand a list of addresses, if the
+    reference passed is actually an array reference, it will be returned
+    directly, or you can store this in $opts{addr_list} and that list will
+    be returned. This allows you to pass the list directly as part of a
+    larger set of options, or by itself.
+
+      $drw->select_addr(\%opts);
+

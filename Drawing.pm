@@ -1,5 +1,5 @@
 package CAD::Drawing;
-our $VERSION = '0.10';
+our $VERSION = '0.25';
 
 # This code is copyright 2003 Eric L. Wilhelm and A. Zahner Co.
 # See below for licensing details.
@@ -11,6 +11,8 @@ use CAD::Drawing::Defined;
 use CAD::Drawing::Manipulate;
 use CAD::Drawing::Calculate;
 use CAD::Drawing::IO;
+use CAD::Calc qw(line_vec unit_angle);
+use Math::Vec qw(NewVec);
 
 our @ISA = qw(
 	CAD::Drawing::Manipulate
@@ -18,29 +20,33 @@ our @ISA = qw(
 	CAD::Drawing::IO
 	);
 
-#use Fcntl;
-#use MLDBM qw(SDBM_File Storable);
 
 ########################################################################
 =pod
 
 =head1 NAME
 
-CAD::Drawing -- Methods to create, load, and save vector graphics
+CAD::Drawing - Methods to create, load, and save vector graphics
 
 =head1 SYNOPSIS
 
 The primary intention of this module is to provide high-level operations
 for creating, loading, saving and manipulating vector graphics without
-having to be overly concerned about smile floormats.
+having to be overly concerned about smile floormats.  As the code has
+seen more use, it has also drifted into a general purpose geometry API.
 
 =item The syntax of this works something like the following:
 
-A simple example of a file converter:
+A simple example of a (slightly misbehaved) file converter:
 
   use CAD::Drawing;
   $drw = CAD::Drawing->new;
   $drw->load("file.dwg");
+  my %opts = (
+	layer => "smudge",
+    height => 5,
+    );
+  $drw->addtext([10, 2, 5], "Kilroy was here", \%opts);
   $drw->save("file.ps");
 
 This is a very basic example, and will barely scratch the surface of
@@ -51,7 +57,7 @@ in the documentation for the backend modules.
 
   Eric L. Wilhelm
   ewilhelm at sbcglobal dot net
-  http://pages.sbcglobal.net/mycroft
+  http://pages.sbcglobal.net/mycroft/
 
 =head1 COPYRIGHT
 
@@ -69,12 +75,6 @@ You may use this software under one of the following licenses:
   (2) Artistic License
     (found at http://www.perl.com/pub/language/misc/Artistic.html)
 
-=head1 NO WARRANTY
-
-This software is distributed with ABSOLUTELY NO WARRANTY.  The author
-and his employer will in no way be held liable for any loss or damages
-resulting from its use.
-
 =head1 Modifications
 
 The source code of this module is made freely available and
@@ -89,7 +89,6 @@ notification of any intended changes or extensions would be most helpful
 in avoiding repeated work for all parties involved.  Please contact the
 author with any such development plans.
 
-
 =head1 SEE ALSO
 
 These modules are required by Drawing.pm and will be automatically
@@ -102,18 +101,22 @@ CAD::Drawing::Defined from your main code (don't do that.))
   CAD::Drawing::Calculate
   CAD::Drawing::Calculate::Finite
   CAD::Drawing::IO
-  CAD::Drawing::IO::OpenDWG
-  CAD::Drawing::IO::PostScript
-  CAD::Drawing::IO::Image
 
 While it might be problematic to have to install a huge tree worth of
 modules just to use one, from a programming and design standpoint, it is
 much easier to deal with so much code when it is broken into separate
-pieces.  Additionally, all of the backend IO modules are optional
-(though the use statements aren't setup that way (anyone want to setup a
-Makefile.PL that will take care of this?))
+pieces.  Additionally, all of the backend IO::* modules are optional
+(and thanks to the new IO.pm plug-in architecture, they will be
+automagically discovered as they are installed.
 
 Each backend module may have additional requirements of its own.
+
+=head1 CHANGES
+
+  0.20 First public release.
+  0.25 Minor additions to documentation.
+       Enhanced options.
+       Begin interface changes.
 
 =cut
 ########################################################################
@@ -146,8 +149,8 @@ used by the object to be freed when it goes out of scope.
 The rule of thumb is: 
 
   my $drw = CAD::Drawing->new(); # lexically scoped (in a loop or sub)
-	or
-	$drw = CAD::Drawing->new(isbig=>1); # $main::drw 
+  or
+  $drw = CAD::Drawing->new(isbig=>1); # $main::drw 
 
 =cut
 
@@ -204,6 +207,74 @@ sub addline {
 } # end subroutine addline definition
 ########################################################################
 
+=head2 add_x
+
+Adds an "X" to the drawing, with the intersection at @pt and each of the
+two legs having $length at $opt{ang}.
+
+  @lines = $drw->add_x(\@pt, $length, \%opt);
+
+=cut
+sub add_x {
+	my $self = shift;
+	my ($pt, $length, $opt) = @_;
+	my %options;
+	(ref($opt) eq "HASH") && (%options = %$opt);
+	my $ang = $options{ang};
+	if(defined($ang)) {
+		my @ick = ($ang, 0);
+		checkarcangs(\@ick);
+		$ang = $ick[0];
+	}
+	else {
+		$ang = 0;
+	}
+	my @diff = map({$length * $_} cos($ang), sin($ang));
+
+	my @pts = (
+		[map({$pt->[$_] + $diff[$_]} 0..1)],
+		[map({$pt->[$_] - $diff[$_]} 0..1)],
+		);
+	my @ret = ($self->addline(\@pts, {%$opt}));
+	push(@ret, $self->addline(\@pts, {%$opt}));
+	$self->Rotate($ret[1], "90d", $pt);
+	## print "adding lines at $ret[0]{id} $ret[1]{id}\n";exit;
+	return(@ret);
+} # end subroutine add_x definition
+########################################################################
+
+=head2 add_fake_ray
+
+Adds an open polyline which has a small hook (nubbin) at one end.  This
+can be used to represent a directional line (vector.)
+
+  $drw->add_fake_ray(\@pts, \%opts);
+
+Options are the same as for addpolygon but closed is forced to false.
+
+=cut
+sub add_fake_ray {
+	my $self = shift;
+	my ($points, $opt) = @_;
+	my %opts;
+	(ref($opt) eq "HASH") && (%opts = %$opt);
+	# maybe we should allow three, since we actually use three?
+	(scalar(@$points) == 2) or croak("cannot draw ray without 2 points");
+	# use a percentage of length, with a 15deg rotation ccw from
+	# reversed direction (later, add options.)
+	my $portion = 0.05;
+	my $rotate = $pi / 12;
+	my $rev = NewVec(line_vec(@$points)->ScalarMult($portion * -1));
+	my $length = $rev->Length();
+	my $ang = $rev->Ang() + $rotate;
+	my $vec = unit_angle($ang);
+	$vec = NewVec($vec->ScalarMult($length));
+	my @end = $vec->Plus($points->[1]);
+	$opts{closed} = 0;
+	return($self->addpolygon([@$points, \@end], \%opts));
+} # end subroutine add_fake_ray definition
+########################################################################
+
 =head2 addpolygon
 
 Add a polyline through (2D) @points.
@@ -215,13 +286,17 @@ Add a polyline through (2D) @points.
 sub addpolygon {
 	my $self = shift;
 	my ($points, $opts) = @_;
-	(scalar(@$points) > 1) or carp("cannot draw pline without 2 or more points");
+	(ref($points) eq "ARRAY") or carp("$points is not ARRAY\n");
+	(scalar(@$points) > 1) or 
+		carp("cannot draw pline without 2 or more points");
 	my $obj;
 	($obj, $opts) = $self->setdefaults("plines", $opts);
 	$obj->{pts} = [map({[@{$_}]} @$points)];
+	## defined($opts->{closed}) && print "closed is $obj->{closed}\n";
 	unless(defined($opts->{closed})) {
+		## print "closing\n";
 		($#$points > 1) && ($obj->{closed} = 1);
-		}
+	}
 	return($obj->{addr});
 } # end subroutine addpolygon definition
 ########################################################################
@@ -295,7 +370,7 @@ sub addtextlines {
 	$opts->{height} || ($opts->{height} = $height);
 	if($opts->{spacing}) {
 		$spacing = $opts->{spacing};
-		delete($opts->{spacing});
+		#delete($opts->{spacing});
 		}
 	my $y = $point[1];
 	my @retlist;
@@ -311,7 +386,10 @@ sub addtextlines {
 
 =head2 addtexttable
 
-  $drw->addtexttable();
+@table is a 2D array of strings.  $opts{spaces} must (currently) 
+contain a ref to a list of column widths.
+
+  $drw->addtexttable(\@point, \@table, \%opts);
 
 =cut
 sub addtexttable {
@@ -322,7 +400,7 @@ sub addtexttable {
 	my %opts;
 	(ref($opts) eq "HASH") && (%opts = %$opts);
 	my @spaces = @{$opts{spaces}};
-	delete($opts{spaces});
+	#delete($opts{spaces});
 	my $length = scalar(@spaces);
 	my @tcols;
 	for(my $col = 0; $col < $length; $col++) {
@@ -436,10 +514,28 @@ sub getImgByName {
 
 =head2 getLayerList
 
+Deprecated.  See list_layers().
+
   @list = $drw->getLayerList(\%opts);
 
 =cut
 sub getLayerList {
+	my $self = shift;
+	return($self->list_layers(@_));
+} # end subroutine getLayerList definition
+########################################################################
+
+=head2 list_layers
+
+Get list of layers in drawing with options as follows:
+
+  %options = (
+    matchregex => qr/name/,
+	);
+  @list = $drw->list_layers(\%opts);
+
+=cut
+sub list_layers {
 	my $self = shift;
 	my ($opts) = @_;
 	my @list;
@@ -450,7 +546,7 @@ sub getLayerList {
 		@list = grep(/$reg/, @list);
 		}
 	return(@list);
-} # end subroutine getLayerList definition
+} # end subroutine list_layers definition
 ########################################################################
 
 =head2 getAddrByLayer
@@ -488,6 +584,7 @@ sub getAddrByType {
 				{layer => $layer, type => $type, id => $_} 
 			} keys(%{$self->{g}{$layer}{$type}})
 			);
+#    warn("list is ", scalar(@list), " elements long\n");
 	$#list || return($list[0]);
 	return(@list);
 } # end subroutine getAddrByType definition
@@ -500,8 +597,9 @@ sub getAddrByType {
 =cut
 sub getAddrByRegex {
 	my $self = shift;
-	my ($layer, $regex, $opts) = @_;
-	my %opts = %$opts;
+	my ($layer, $regex, $opt) = @_;
+	my %opts;
+	(ref($opt) eq "HASH") && (%opts = %$opt);
 	(ref($regex) eq "Regexp") || 
 			croak("getAddrByRegex needs precompiled regex");
 	my @list = $self->getAddrByType($layer, "texts");
@@ -537,7 +635,7 @@ sub getAddrByColor {
 	$color = color_translate($color);
 #    print "looking for $color on $layer for $type\n";
 #    print "existing colors: ", 
-		join(" ", keys(%{$self->{colortrack}{$layer}{$type}})), "\n";
+#		join(" ", keys(%{$self->{colortrack}{$layer}{$type}})), "\n";
 	my @list;
 	if(my $list = $self->{colortrack}{$layer}{$type}{$color}) {
 		@list = @$list;
@@ -573,6 +671,21 @@ sub getEntPoints {
 		return();
 		}
 } # end subroutine getEntPoints definition
+########################################################################
+
+=head2 addr_by_id
+
+  $drw->addr_by_id($layer, $type, $id);
+
+=cut
+sub addr_by_id {
+	my $self = shift;
+	my ($l, $t, $id) = @_;
+	if($self->{g}{$l}{$t}{$id}) {
+		return({layer => $l, type => $t, id => $id});
+	}
+	return();
+} # end subroutine addr_by_id definition
 ########################################################################
 
 =head2 Get
@@ -660,7 +773,16 @@ sub setdefaults {
 #            print "id: $id\n";
 		}
 		$opts->{id} = $id;
+	}
+	else {
+		if($self->{g}{$layer}{$type}{$id}) {
+#            croak("id $id is not unique!");
+			while($self->{g}{$layer}{$type}{$id}) {
+				$id .= ".";
+#                print "now id $id\n";
+			}
 		}
+	}
 #    print "$layer ($type) id: $id\n";
 	$self->{lastid}{$layer}{$type} = $id;
 	my %addr = (
@@ -740,6 +862,12 @@ key-value pairs.  Aside from the options supported by check_select()
 this also supports the option "all", which, if true, will select all
 entities (this is the default if no hash reference is passed.)
 
+Furthermore, if you already have in-hand a list of addresses, if the
+reference passed is actually an array reference, it will be returned
+directly, or you can store this in $opts{addr_list} and that list will
+be returned.  This allows you to pass the list directly as part of a
+larger set of options, or by itself.
+
   $drw->select_addr(\%opts);
 
 =cut
@@ -757,6 +885,7 @@ sub select_addr {
 	else {
 		$opts{all} = 1;
 		}
+	$opts{addr_list} && return($opts{addr_list});
 	my ($s, $n);
 	$opts{all} || (($s, $n) = check_select(\%opts));
 	my @layers_to_check = keys(%{$self->{g}});
@@ -793,7 +922,11 @@ sub select_addr {
 					my $color = $obj->{color};
 					$s->{c} && ($s->{c}{$color} || next);
 					$n->{c} && ($n->{c}{$color} && next);
-					print "select color: $color\n";
+					# FIXME: this is getting bad:
+					my $linetype = $obj->{linetype};
+					$s->{lt} && ($s->{lt}{$linetype} || next);
+					$n->{lt} && ($n->{lt}{$linetype} && next);
+#                    print "select color: $color\n";
 					push(@outlist, \%addr);
 					} # end foreach $id
 				} # end if select by color or linetype
