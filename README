@@ -1,0 +1,89 @@
+CAD::Drawing.pm - Methods to create, load, and save vector graphics
+
+ABSTRACT:
+
+This module provides a uniform interface to loading, saving, and
+manipulating geometric data.  It utilizes other Perl modules to support
+multiple file formats.  Support for additional formats should be fairly
+trivial to add, and the data structure has room for storage of format-
+specific data if needed (though this is strongly discouraged by the very
+principle of the module design.)
+
+Currently, the module supports loading and saving dxf and dwg entities
+through the use of CAD::Drawing::IO::DWGI, which is an Inline wrapper on
+the OpenDWG consortium's toolkit (library and header files to be 
+obtained by the user directly from the consortium due to their licensing
+terms.)
+
+COPYRIGHT INFO:
+
+The CAD::Drawing module is copyright 2003 Eric Wilhelm and A. Zahner Co.
+It is freely distributable under the same licensing terms as Perl.  See
+the GPL or Artistic Licenses in the Perl source code for details.
+
+This software is provided with ABSOLUTELY NO WARRANTY.  
+
+All responsibility for the performance of this software lies with the
+user and in no way shall the Author or any other entity be held liable
+for any damage which may result from the use of this software.
+
+AUTHOR:
+Eric L. Wilhelm
+ewilhelm AT sbcglobal DOT net
+http://pages.sbcglobal.net/mycroft
+
+WHERE IS THE MODULE:
+
+I'm still working on it, though it should only be released soon.  The
+original version had problems with indexing, namespace, and structure.
+
+Vast improvements are being made as you read this file, with a new data
+structure that will allow naming of entities and increase the
+flexibility of the module as a whole.
+
+The package will consist of several modules, though the "front-end"
+interface will be accessible by simply "use CAD::Drawing" and via the
+creation of a Drawing object.  
+
+Multiple drawings can be open in one program simultaneously and one
+drawing can be saved to multiple formats (or loaded from multiple
+formats when support for more loading more formats arrives.)
+
+
+RELATED MODULES:
+
+	CAD::Drawing
+	CAD::Drawing::Defined
+	CAD::Drawing::Manipulate
+	CAD::Drawing::IO
+	CAD::Drawing::IO::Image
+	CAD::Drawing::IO::PostScript
+	CAD::Drawing::IO::DWGI
+
+ABOUT:
+
+There are currently no Perl modules available for loading and
+manipulating geometric data from dxf and dwg formats.  This module does
+this and much more, providing a quick and consistent interface
+regardless of source or destination format.  It encapsulates what I
+think is a robust and flexible data structure for 2D geometric data.
+
+It currently supports loading and saving dwg and dxf formats via the
+openDWG toolkit.  Saving is also possible to Image::Magick formats and
+to postscript (via PostScript::Simple.)  The driving idea behind this
+module is to unify the interface to multiple file-formats and
+encapsulate the geometric data in an organized way.  Adding support for
+other file types is just a matter of writing a load or save function for
+that type and will not change the programming interface.
+
+Entity selection and tracking is available through the use of hash
+references which act as addresses.  Any manipulation function (move,
+copy, rotate, clone, mirror, clip, offset, delete) can operate on an
+entity (point, line, arc, circle, text, polyline) using only the
+address.  This trivializes the writing of programs which deal with
+multiple drawings and formats and prevents errors and omissions when
+dealing with multiple entity types.  It has been developed for use in
+batch-processing, but also makes geometric one-liners possible and would
+work well for prototyping cad software (though it currently has no gui
+components.)
+
