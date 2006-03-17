@@ -1,9 +1,7 @@
 package CAD::Drawing;
-our $VERSION = '0.25';
+our $VERSION = '0.26';
 
-# This code is copyright 2003 Eric L. Wilhelm and A. Zahner Co.
-# See below for licensing details.
-
+use warnings;
 use strict;
 use Carp;
 
@@ -35,6 +33,8 @@ for creating, loading, saving and manipulating vector graphics without
 having to be overly concerned about smile floormats.  As the code has
 seen more use, it has also drifted into a general purpose geometry API.
 
+=over
+
 =item The syntax of this works something like the following:
 
 A simple example of a (slightly misbehaved) file converter:
@@ -43,7 +43,7 @@ A simple example of a (slightly misbehaved) file converter:
   $drw = CAD::Drawing->new;
   $drw->load("file.dwg");
   my %opts = (
-	layer => "smudge",
+    layer => "smudge",
     height => 5,
     );
   $drw->addtext([10, 2, 5], "Kilroy was here", \%opts);
@@ -53,15 +53,18 @@ This is a very basic example, and will barely scratch the surface of
 this module's capabilities.  See the details for each function below and
 in the documentation for the backend modules.
 
+=back
+
 =head1 AUTHOR
 
-  Eric L. Wilhelm
-  ewilhelm at sbcglobal dot net
-  http://pages.sbcglobal.net/mycroft/
+Eric L. Wilhelm <ewilhelm at cpan dot org>
+
+http://scratchcomputing.com
 
 =head1 COPYRIGHT
 
-This module is copyright (C) 2003 by Eric L. Wilhelm and A. Zahner Co.
+This module is copyright (C) 2004-2006 by Eric L. Wilhelm.  Portions
+copyright (C) 2003 by Eric L. Wilhelm and A. Zahner Co.
 
 =head1 LICENSE
 
@@ -74,6 +77,12 @@ You may use this software under one of the following licenses:
     (found at http://www.gnu.org/copyleft/gpl.html)
   (2) Artistic License
     (found at http://www.perl.com/pub/language/misc/Artistic.html)
+
+=head1 NO WARRANTY
+
+This software is distributed with ABSOLUTELY NO WARRANTY.  The author,
+his former employer, and any other contributors will in no way be held
+liable for any loss or damages resulting from its use.
 
 =head1 Modifications
 
@@ -96,27 +105,41 @@ included by the single I<use> Drawing; statement.  No functions are
 exported to the main program's namespace (unless you try to use
 CAD::Drawing::Defined from your main code (don't do that.))
 
-  CAD::Drawing::Manipulate
-  CAD::Drawing::Defined
-  CAD::Drawing::Calculate
-  CAD::Drawing::Calculate::Finite
-  CAD::Drawing::IO
+=over
 
-While it might be problematic to have to install a huge tree worth of
-modules just to use one, from a programming and design standpoint, it is
-much easier to deal with so much code when it is broken into separate
-pieces.  Additionally, all of the backend IO::* modules are optional
-(and thanks to the new IO.pm plug-in architecture, they will be
-automagically discovered as they are installed.
+=item L<CAD::Drawing::Defined|CAD::Drawing::Defined>
 
-Each backend module may have additional requirements of its own.
+Generally useful constants and definitions used throughout the
+CAD::Drawing toolkit.
 
-=head1 CHANGES
+=item L<CAD::Drawing::Manipulate|CAD::Drawing::Manipulate>
 
-  0.20 First public release.
-  0.25 Minor additions to documentation.
-       Enhanced options.
-       Begin interface changes.
+Entity manipulation methods.
+
+=item L<CAD::Drawing::Manipulate::Transform|CAD::Drawing::Manipulate::Transform>
+
+Matrix transform methods.
+
+=item L<CAD::Drawing::Manipulate::Graphics|CAD::Drawing::Manipulate::Graphics>
+
+Deals with embedded image definitions.
+
+=item L<CAD::Drawing::Calculate|CAD::Drawing::Calculate>
+
+Calculations and coordinate system transforms.
+
+=item L<CAD::Drawing::Calculate::Finite|CAD::Drawing::Calculate::Finite>
+
+Fitting and bounding.
+
+=item L<CAD::Drawing::IO|CAD::Drawing::IO>
+
+Input/Output plugin mechanism.
+
+=back
+
+All of the backend IO::* modules are optional, and will be automagically
+discovered as they are installed.  See L<CAD::Drawing::IO> for details.
 
 =cut
 ########################################################################
@@ -131,6 +154,8 @@ Returns a blessed reference to a new CAD::Drawing object.
 
 %options becomes a part of the data structure, so be careful what you
 %ask for, because you'll get it (I check nothing!)
+
+=over
 
 =item Currently useful options:
 
@@ -150,7 +175,9 @@ The rule of thumb is:
 
   my $drw = CAD::Drawing->new(); # lexically scoped (in a loop or sub)
   or
-  $drw = CAD::Drawing->new(isbig=>1); # $main::drw 
+  $drw = CAD::Drawing->new(isbig=>1); # $main::drw
+
+=back
 
 =cut
 
@@ -181,9 +208,7 @@ The standard options are as follows:
   layer     => $layername
   color     => $color (as name or number (0-256))
   linetype  => $linetype (marginally supported in most formats)
-  id        => $id	
-
-=cut
+  id        => $id
 
 =head2 addline
 
@@ -341,6 +366,7 @@ sub addtext {
 	my ($obj) = $self->setdefaults("texts", $opts);
 	$obj->{pt} = [@$point];
 	$obj->{string} = $string;
+	# print "adding text string: $string\n";
 	# If I let setdefaults pass all options into $obj,
 	#	I don't even have to worry about them here!
 	$obj->{height} || ($obj->{height} = 1);
@@ -366,20 +392,27 @@ sub addtextlines {
 	my @point = @$point;
 	(ref($opts) eq "HASH") || ($opts = {});
 	$opts = {%$opts}; # deref as much as possible
-	my($height, $spacing) = (1, 1.67);
+	my $height = 1;
 	$opts->{height} || ($opts->{height} = $height);
+	$height = $opts->{height};
+	my $spacing = 1.67;
 	if($opts->{spacing}) {
 		$spacing = $opts->{spacing};
 		#delete($opts->{spacing});
-		}
+	}
 	my $y = $point[1];
 	my @retlist;
-	foreach my $line (split(/\015?\012/, $string)) {
-		if($line) {
+	my @lines = split(/\015?\012/, $string);
+	# print scalar(@lines), " lines todo\n";
+	foreach my $line (@lines) {
+		if(length($line)) {
+			# print "line $line\n";
 			push(@retlist, $self->addtext([$point[0], $y], $line, $opts));
-			}
-		$y -= $spacing * $height;
+			# print "okay\n";
 		}
+		$y -= $spacing * $height;
+	}
+	# warn "done";
 	return(@retlist);
 } # end subroutine addtextlines definition
 ########################################################################
@@ -495,8 +528,9 @@ sub addimage {
 
 =head1 Query Functions
 
+=head2 getImgByName
+
 =cut
-########################################################################
 sub getImgByName {
 	my $self = shift;
 	my ($layer, $name) = @_;
@@ -549,11 +583,22 @@ sub list_layers {
 } # end subroutine list_layers definition
 ########################################################################
 
-=head2 getAddrByLayer
+=head2 addr_by_layer
 
 Returns a list of addresses for all objects on $layer.
 
-  @addr_list = $drw->getAddrByLayer($layer);
+  my @addr_list = $drw->addr_by_layer($layer);
+
+=cut
+sub addr_by_layer {
+	my $self = shift;
+	return($self->getAddrByLayer(@_));
+} # end subroutine addr_by_layer definition
+########################################################################
+
+=head2 getAddrByLayer
+
+deprecated
 
 =cut
 sub getAddrByLayer {
@@ -566,11 +611,22 @@ sub getAddrByLayer {
 } # end subroutine getAddrByLayer definition
 ########################################################################
 
-=head2 getAddrByType
+=head2 addr_by_type
 
 Returns a list of addresses for $type entities on $layer.
 
-  @list = $drw->getAddrByType($layer, $type);
+  $drw->addr_by_type($layer, $type);
+
+=cut
+sub addr_by_type {
+	my $self = shift;
+	return($self->getAddrByType(@_));
+} # end subroutine addr_by_type definition
+########################################################################
+
+=head2 getAddrByType
+
+deprecated
 
 =cut
 sub getAddrByType {
@@ -590,9 +646,20 @@ sub getAddrByType {
 } # end subroutine getAddrByType definition
 ########################################################################
 
+=head2 addr_by_regex
+
+  @list = $drw->addr_by_regex($layer, qr/^model\s+\d+$/, $opts);
+
+=cut
+sub addr_by_regex {
+	my $self = shift;
+	return($self->getAddrByRegex(@_));
+} # end subroutine addr_by_regex definition
+########################################################################
+
 =head2 getAddrByRegex
 
-  @list = $drw->getAddrByRegex($layer, qr/^model\s+\d+$/, $opts);
+deprecated
 
 =cut
 sub getAddrByRegex {
@@ -616,9 +683,20 @@ sub getAddrByRegex {
 } # end subroutine getAddrByRegex definition
 ########################################################################
 
+=head2 addr_by_color
+
+  @list = $drw->addr_by_color($layer, $type, $color);
+
+=cut
+sub addr_by_color {
+	my $self = shift;
+	return($self->getAddrByColor(@_));
+} # end subroutine addr_by_color definition
+########################################################################
+
 =head2 getAddrByColor
 
-  @list = $drw->getAddrByColor($layer, $type, $color);
+deprecated
 
 =cut
 sub getAddrByColor {
@@ -732,9 +810,6 @@ sub Set {
 
 =head1 Internal Functions
 
-=cut
-########################################################################
-
 =head2 setdefaults
 
 internal use only
@@ -766,11 +841,19 @@ sub setdefaults {
 	unless(defined($id)) {
 		$id = 0;
 		my $was_id = $id;
+		my $limit = 5;
+		my $rep = 0;
 		while($self->{g}{$layer}{$type}{$id}) {
 			$id = $self->{lastid}{$layer}{$type} + 1;
 			($id == $was_id) && $id++;
 			$was_id = $id;
 #            print "id: $id\n";
+			$rep++;
+			if($rep > $limit) {
+				$rep = 0;
+				$id+= 2;
+				$self->{lastid}{$layer}{$type} = $id;
+			}
 		}
 		$opts->{id} = $id;
 	}
@@ -830,7 +913,9 @@ sub getobj {
 
 =head2 remove
 
-  $drw->remove();
+Removes the entity at $addr from the data structure.
+
+  $drw->remove($addr);
 
 =cut
 sub remove {
@@ -838,17 +923,25 @@ sub remove {
 	my ($addr) = @_;
 	if($self->{colortrack}) {
 		# must find this in the colortrack array:
-		# may be a fatal assumption, but find is based on converting
-		# a hash reference into a text string
+		# find based on converting a hash reference into a text string
+		# was a fatal assumption, now this does the thorough check
 		my $color = $self->Get("color", $addr);
 		my $list = 
 			$self->{colortrack}{$addr->{layer}}{$addr->{type}}{$color};
+		my $rem = 0;
 		for(my $i = 0; $i < @$list; $i++) {
-			if($list->[$i] eq $addr) {
+			if(
+				($list->[$i]{id} == $addr->{id}) and
+				($list->[$i]{layer} eq $addr->{layer}) and 
+				($list->[$i]{type} eq $addr->{type})
+				) {
 				my $removed = splice(@$list, $i, 1);
+				$rem++;
 #                print "killed color tracking element $i\n";
 			}
 		}
+		$rem or
+			warn("colortrack removal failure may cause later death");
 	}
 	delete($self->{g}{$addr->{layer}}{$addr->{type}}{$addr->{id}});
 

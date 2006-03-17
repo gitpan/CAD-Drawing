@@ -1,6 +1,12 @@
-Changes
-      0.20 First public release.
-      0.25 Minor additions to documentation.
-           Enhanced options.
-           Begin interface changes.
+0.25
+	Minor additions to documentation.
+	Enhanced options.
+	Begin interface changes.
+	Fixed circular dependencies
+	Various minor enhancements
+	Finite.pm - fit_to_bound() improvements
+	IO.pm - Changed to plug-in-style architecture
+	Compressed.pm - Fixed loop-back into compressed load() function.
 
+0.20
+	First public release.
